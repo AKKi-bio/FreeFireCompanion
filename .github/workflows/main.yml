@@ -29,50 +29,23 @@ jobs:
                  -o build/FreeFireCompanion \
                  $SWIFT_FILES
 
-      - name: Package Valid IPA for Diawi & Web Installers
+      - name: Package Valid IPA for Diawi
         run: |
           rm -rf Payload FreeFireCompanion.ipa
           mkdir -p Payload/FreeFireCompanion.app
           
           cp build/FreeFireCompanion Payload/FreeFireCompanion.app/
           
-          cat << 'EOF' > Payload/FreeFireCompanion.app/Info.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleDevelopmentRegion</key>
-              <string>en</string>
-              <key>CFBundleExecutable</key>
-              <string>FreeFireCompanion</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.freefire.companion</string>
-              <key>CFBundleInfoDictionaryVersion</key>
-              <string>6.0</string>
-              <key>CFBundleName</key>
-              <string>FF Companion</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>1.0</string>
-              <key>CFBundleVersion</key>
-              <string>1</string>
-              <key>LSRequiresIPhoneOS</key>
-              <true/>
-              <key>MinimumOSVersion</key>
-              <string>16.0</string>
-              <key>UIRequiredDeviceCapabilities</key>
-              <array>
-                  <string>arm64</string>
-              </array>
-              <key>UISupportedInterfaceOrientations</key>
-              <array>
-                  <string>UIInterfaceOrientationPortrait</string>
-              </array>
-          </dict>
-          EOF
+          plutil -create xml1 Payload/FreeFireCompanion.app/Info.plist
+          plutil -insert CFBundleExecutable -string "FreeFireCompanion" Payload/FreeFireCompanion.app/Info.plist
+          plutil -insert CFBundleIdentifier -string "com.freefire.companion" Payload/FreeFireCompanion.app/Info.plist
+          plutil -insert CFBundleName -string "FF Companion" Payload/FreeFireCompanion.app/Info.plist
+          plutil -insert CFBundlePackageType -string "APPL" Payload/FreeFireCompanion.app/Info.plist
+          plutil -insert CFBundleShortVersionString -string "1.0" Payload/FreeFireCompanion.app/Info.plist
+          plutil -insert CFBundleVersion -string "1" Payload/FreeFireCompanion.app/Info.plist
+          plutil -insert LSRequiresIPhoneOS -bool true Payload/FreeFireCompanion.app/Info.plist
+          plutil -insert MinimumOSVersion -string "16.0" Payload/FreeFireCompanion.app/Info.plist
 
-          # Convert Info.plist to Apple Binary Format for Diawi compatibility
           plutil -convert binary1 Payload/FreeFireCompanion.app/Info.plist
 
           zip -r FreeFireCompanion.ipa Payload
