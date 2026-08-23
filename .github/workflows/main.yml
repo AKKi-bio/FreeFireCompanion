@@ -10,25 +10,30 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Build iOS App Executable
         run: |
           mkdir -p build
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           SWIFT_FILES=$(find . -name "*.swift" -not -path "*/.*")
-          echo "Found Swift files: $SWIFT_FILES"
           
-          swiftc -target arm64-apple-ios16.0 \
+          xcrun swiftc -target arm64-apple-ios16.0 \
                  -sdk "$SDK_PATH" \
                  -parse-as-library \
+                 -framework SwiftUI \
+                 -framework UIKit \
+                 -framework Foundation \
+                 -framework CoreGraphics \
                  -O \
                  -o build/FreeFireCompanion \
                  $SWIFT_FILES
 
-      - name: Package into IPA
+      - name: Package Valid IPA for Diawi & Web Installers
         run: |
+          rm -rf Payload FreeFireCompanion.ipa
           mkdir -p Payload/FreeFireCompanion.app
+          
           cp build/FreeFireCompanion Payload/FreeFireCompanion.app/
           
           cat << 'EOF' > Payload/FreeFireCompanion.app/Info.plist
@@ -36,10 +41,14 @@ jobs:
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
+              <key>CFBundleDevelopmentRegion</key>
+              <string>en</string>
               <key>CFBundleExecutable</key>
               <string>FreeFireCompanion</string>
               <key>CFBundleIdentifier</key>
               <string>com.freefire.companion</string>
+              <key>CFBundleInfoDictionaryVersion</key>
+              <string>6.0</string>
               <key>CFBundleName</key>
               <string>FF Companion</string>
               <key>CFBundlePackageType</key>
@@ -50,6 +59,8 @@ jobs:
               <string>1</string>
               <key>LSRequiresIPhoneOS</key>
               <true/>
+              <key>MinimumOSVersion</key>
+              <string>16.0</string>
               <key>UIRequiredDeviceCapabilities</key>
               <array>
                   <string>arm64</string>
@@ -60,6 +71,9 @@ jobs:
               </array>
           </dict>
           EOF
+
+          # Convert Info.plist to Apple Binary Format for Diawi compatibility
+          plutil -convert binary1 Payload/FreeFireCompanion.app/Info.plist
 
           zip -r FreeFireCompanion.ipa Payload
 
