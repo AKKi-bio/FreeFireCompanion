@@ -1,12 +1,17 @@
-name: Free iOS App Builder
+name: Free iOS App & GitHub Release Builder
 
 on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
-  build-ios:
+  build-and-release-ios:
     runs-on: macos-latest
     steps:
       - name: Checkout Code
@@ -29,7 +34,7 @@ jobs:
                  -o build/FreeFireCompanion \
                  $SWIFT_FILES
 
-      - name: Package Valid IPA for Diawi
+      - name: Package Valid IPA for Distribution
         run: |
           rm -rf Payload FreeFireCompanion.ipa
           mkdir -p Payload/FreeFireCompanion.app
@@ -55,3 +60,17 @@ jobs:
         with:
           name: FreeFireCompanion-iOS-App
           path: FreeFireCompanion.ipa
+
+      - name: Create GitHub Release with IPA Download
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Free Fire Companion iOS App v1.0.${{ github.run_number }}
+          body: |
+            🚀 **Free Fire Companion iOS App Build**
+            
+            Download the native iOS `.ipa` file below directly to your iPhone or PC!
+          files: |
+            FreeFireCompanion.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
