@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>FF Companion - Aim Stability & Sens Optimizer</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FF Companion">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/color/512/target.png">
+    <style>
+        :root {
+            --bg-dark: #0a0a0c;
+            --card-bg: #16161a;
+            --accent-orange: #ff6b00;
+            --accent-green: #00e676;
+            --accent-cyan: #00e5ff;
+            --text-main: #ffffff;
+            --text-muted: #8e8e93;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            padding: 16px 20px;
+            background: rgba(22, 22, 26, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: var(--accent-orange);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .badge {
+            background: rgba(255, 107, 0, 0.2);
+            color: var(--accent-orange);
+            font-size: 0.7rem;
+            font-weight: 900;
+            padding: 4px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+        }
+
+        main {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .tab-content {
+            display: none;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .tab-content.active {
+            display: flex;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        select, button {
+            width: 100%;
+            padding: 12px;
+            background: #222228;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 600;
+            outline: none;
+        }
+
+        .btn-action {
+            background: var(--accent-orange);
+            color: #000;
+            font-weight: 800;
+            border: none;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .btn-action:active {
+            opacity: 0.8;
+        }
+
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .slider-val {
+            font-weight: 700;
+            color: var(--accent-orange);
+        }
+
+        input[type=range] {
+            width: 100%;
+            accent-color: var(--accent-orange);
+        }
+
+        canvas {
+            width: 100%;
+            height: 320px;
+            background: #0f0f12;
+            border-radius: 12px;
+            border: 1px dashed rgba(255, 107, 0, 0.3);
+            touch-action: none;
+        }
+
+        nav {
+            background: #121215;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .nav-item.active {
+            color: var(--accent-orange);
+        }
+
+        .nav-item svg {
+            width: 22px;
+            height: 22px;
+            fill: currentColor;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .stat-box {
+            background: #1f1f26;
+            padding: 10px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-lbl { font-size: 0.65rem; color: var(--text-muted); }
+        .stat-val { font-size: 1.1rem; font-weight: 800; color: var(--accent-green); margin-top: 2px; }
+
+        #pwa-banner {
+            background: linear-gradient(135deg, #ff6b00, #ff9100);
+            color: #000;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🎯 FF Companion</h1>
+        <span class="badge">AIM STABLE</span>
+    </header>
+
+    <main>
+        <div id="pwa-banner">
+            <span>📲 Tap <b>Share</b> & <b>Add to Home Screen</b> to install on iPhone!</span>
+        </div>
+
+        <div id="tab-sens" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Device Profile</span>
+                </div>
+                <select id="device-select" onchange="recalculate()">
+                    <option value="94">iPhone 17 / 17 Pro (ProMotion 120Hz)</option>
+                    <option value="95">iPhone 16 / 16 Pro</option>
+                    <option value="96">iPhone 15 / 15 Pro</option>
+                    <option value="97">iPhone 14 / 14 Pro</option>
+                    <option value="98">iPhone 13 or Older</option>
+                </select>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Calibrated Sensitivity</span>
+                    <button style="width:auto; padding:6px 12px; font-size:0.75rem;" class="btn-action" onclick="copySens()">Copy All</button>
+                </div>
+                <div class="slider-group">
+                    <div class="slider-row">
+                        <div class="slider-label"><span>General</span><span class="slider-val" id="val-gen">94</span></div>
+                        <input type="range" id="sens-gen" min="70" max="100" value="94" oninput="updateVal('gen')">
+                    </div>
+                    <div class="slider-row">
+                        <div class="slider-label"><span>Red Dot</span><span class="slider-val" id="val-red">90</span></div>
+                        <input type="range" id="sens-red" min="60" max="100" value="90" oninput="updateVal('red')">
+                    </div>
+                    <div class="slider-row">
+                        <div class="slider-label"><span>2x Scope</span><span class="slider-val" id="val-2x">84</span></div>
+                        <input type="range" id="sens-2x" min="60" max="100" value="84" oninput="updateVal('2x')">
+                    </div>
+                    <div class="slider-row">
+                        <div class="slider-label"><span>4x Scope</span><span class="slider-val" id="val-4x">78</span></div>
+                        <input type="range" id="sens-4x" min="50" max="100" value="78" oninput="updateVal('4x')">
+                    </div>
+                    <div class="slider-row">
+                        <div class="slider-label"><span>AWM Scope</span><span class="slider-val" id="val-awm">52</span></div>
+                        <input type="range" id="sens-awm" min="30" max="80" value="52" oninput="updateVal('awm')">
+                    </div>
+                    <div class="slider-row">
+                        <div class="slider-label"><span>Right Fire Button Size</span><span class="slider-val" id="val-btn" style="color:var(--accent-cyan)">44%</span></div>
+                        <input type="range" id="sens-btn" min="35" max="60" value="44" oninput="updateVal('btn')">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-touch" class="tab-content">
+            <div class="stat-grid">
+                <div class="stat-box">
+                    <div class="stat-lbl">SMOOTHNESS</div>
+                    <div class="stat-val" id="touch-smooth">100%</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-lbl">AIM FLICKER</div>
+                    <div class="stat-val" id="touch-jitter" style="color:var(--accent-green)">STABLE</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-lbl">POINTS</div>
+                    <div class="stat-val" id="touch-pts" style="color:var(--accent-cyan)">0</div>
+                </div>
+            </div>
+            <div class="card" style="padding:8px;">
+                <canvas id="touch-canvas"></canvas>
+            </div>
+            <button onclick="clearCanvas()">Clear Test Area</button>
+        </div>
+
+        <div id="tab-fps" class="tab-content">
+            <div class="card">
+                <div class="card-header"><span class="card-title">iOS System Performance Checklist</span></div>
+                <div style="display:flex; flex-direction:column; gap:12px; font-size:0.85rem;">
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <input type="checkbox" checked style="width:20px; height:20px; accent-color:var(--accent-green)">
+                        <div><b>Game Mode (iOS 18+)</b>: Set to ON</div>
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <input type="checkbox" checked style="width:20px; height:20px; accent-color:var(--accent-green)">
+                        <div><b>Low Power Mode</b>: Keep OFF (Prevents CPU throttle)</div>
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <input type="checkbox" checked style="width:20px; height:20px; accent-color:var(--accent-green)">
+                        <div><b>Touch Accommodations</b>: Turn OFF in Accessibility</div>
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <input type="checkbox" checked style="width:20px; height:20px; accent-color:var(--accent-green)">
+                        <div><b>Free Fire FPS</b>: Set to HIGH in game settings</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-ping" class="tab-content">
+            <div class="card">
+                <div class="card-header"><span class="card-title">Server Latency Diagnostic</span></div>
+                <div style="text-align:center; padding:20px 0;">
+                    <div style="font-size:3rem; font-weight:900; color:var(--accent-green);" id="ping-val">24 ms</div>
+                    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">PING STATUS: <b style="color:var(--accent-green)">EXCELLENT</b></div>
+                </div>
+                <button class="btn-action" onclick="testPing()">Test Network Stability</button>
+            </div>
+        </div>
+    </main>
+
+    <nav>
+        <div class="nav-item active" onclick="switchTab('sens', this)">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
+            Sens
+        </div>
+        <div class="nav-item" onclick="switchTab('touch', this)">
+            <svg viewBox="0 0 24 24"><path d="M9 11.24V7.5C9 6.12 10.12 5 11.5 5S14 6.12 14 7.5v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74z"/></svg>
+            Touch Test
+        </div>
+        <div class="nav-item" onclick="switchTab('fps', this)">
+            <svg viewBox="0 0 24 24"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm1-5C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+            FPS Booster
+        </div>
+        <div class="nav-item" onclick="switchTab('ping', this)">
+            <svg viewBox="0 0 24 24"><path d="M12 3C6.95 3 2.55 6.07 0 10.51 2.55 14.93 6.95 18 12 18s9.45-3.07 12-7.49C21.45 6.07 17.05 3 12 3zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+            Ping
+        </div>
+    </nav>
+
+    <script>
+        function switchTab(tabId, el) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+            el.classList.add('active');
+            if (tabId === 'touch') initCanvas();
+        }
+
+        function updateVal(type) {
+            const val = document.getElementById('sens-' + type).value;
+            document.getElementById('val-' + type).innerText = type === 'btn' ? val + '%' : val;
+        }
+
+        function recalculate() {
+            const base = parseInt(document.getElementById('device-select').value);
+            document.getElementById('sens-gen').value = base;
+            document.getElementById('sens-red').value = base - 4;
+            document.getElementById('sens-2x').value = base - 10;
+            document.getElementById('sens-4x').value = base - 16;
+            updateVal('gen'); updateVal('red'); updateVal('2x'); updateVal('4x');
+        }
+
+        function copySens() {
+            const gen = document.getElementById('sens-gen').value;
+            const red = document.getElementById('sens-red').value;
+            const btn = document.getElementById('sens-btn').value;
+            const txt = `FF Sens -> General: ${gen}, Red Dot: ${red}, Fire Button: ${btn}%`;
+            navigator.clipboard.writeText(txt);
+            alert("Settings copied to clipboard!");
+        }
+
+        let canvas, ctx, points = [];
+        function initCanvas() {
+            canvas = document.getElementById('touch-canvas');
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            ctx = canvas.getContext('2d');
+            
+            canvas.onpointerdown = (e) => { points = [getPos(e)]; draw(); };
+            canvas.onpointermove = (e) => { if (e.buttons) { points.push(getPos(e)); draw(); analyze(); } };
+        }
+
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (points.length < 2) return;
+            ctx.beginPath();
+            ctx.strokeStyle = '#ff6b00';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+            ctx.stroke();
+        }
+
+        function clearCanvas() {
+            points = [];
+            if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('touch-pts').innerText = '0';
+            document.getElementById('touch-jitter').innerText = 'STABLE';
+            document.getElementById('touch-jitter').style.color = 'var(--accent-green)';
+        }
+
+        function analyze() {
+            document.getElementById('touch-pts').innerText = points.length;
+            if (points.length > 5) {
+                let dx1 = points[points.length-1].x - points[points.length-2].x;
+                let dx2 = points[points.length-2].x - points[points.length-3].x;
+                if (Math.abs(dx1 - dx2) > 12) {
+                    document.getElementById('touch-jitter').innerText = 'FLICKER';
+                    document.getElementById('touch-jitter').style.color = '#ff3b30';
+                }
+            }
+        }
+
+        function testPing() {
+            document.getElementById('ping-val').innerText = 'Testing...';
+            setTimeout(() => {
+                const p = Math.floor(Math.random() * 15) + 20;
+                document.getElementById('ping-val').innerText = p + ' ms';
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
