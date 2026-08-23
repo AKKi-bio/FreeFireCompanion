@@ -1,4 +1,4 @@
-name: Free iOS App & GitHub Release Builder
+name: Free iOS 1-Click OTA Direct Installer
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   id-token: write
 
 jobs:
-  build-and-release-ios:
+  build-and-deploy-ota:
     runs-on: macos-latest
     steps:
       - name: Checkout Code
@@ -34,7 +34,7 @@ jobs:
                  -o build/FreeFireCompanion \
                  $SWIFT_FILES
 
-      - name: Package Valid IPA for Distribution
+      - name: Package Valid IPA
         run: |
           rm -rf Payload FreeFireCompanion.ipa
           mkdir -p Payload/FreeFireCompanion.app
@@ -55,21 +55,22 @@ jobs:
 
           zip -r FreeFireCompanion.ipa Payload
 
-      - name: Upload IPA Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: FreeFireCompanion-iOS-App
-          path: FreeFireCompanion.ipa
+      - name: Commit IPA & Manifest to Repository
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add FreeFireCompanion.ipa manifest.plist || true
+          git commit -m "Auto-update compiled IPA for 1-click OTA install" || true
+          git push || true
 
-      - name: Create GitHub Release with IPA Download
+      - name: Create GitHub Release with IPA
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: Free Fire Companion iOS App v1.0.${{ github.run_number }}
+          name: Free Fire Companion iOS v1.0.${{ github.run_number }}
           body: |
-            🚀 **Free Fire Companion iOS App Build**
-            
-            Download the native iOS `.ipa` file below directly to your iPhone or PC!
+            📲 **1-Click Direct Wireless iPhone Install Link:**
+            [itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/AKKi-bio/FreeFireCompanion/main/manifest.plist](itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/AKKi-bio/FreeFireCompanion/main/manifest.plist)
           files: |
             FreeFireCompanion.ipa
         env:
