@@ -12,25 +12,21 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
-
-      - name: Build iOS App
+      - name: Build iOS App Executable
         run: |
           mkdir -p build
-          xcrun -sdk iphoneos swiftc \
-            -target arm64-apple-ios16.0 \
-            -emit-executable \
-            -o build/FreeFireCompanion \
-            FreeFireCompanionApp.swift \
-            ContentView.swift \
-            Models/DeviceProfile.swift \
-            Views/SensitivityView.swift \
-            Views/TouchTestView.swift \
-            Views/PerformanceGuideView.swift \
-            Views/PingTestView.swift
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          SWIFT_FILES=$(find . -name "*.swift" -not -path "*/.*")
+          echo "Found Swift files: $SWIFT_FILES"
+          
+          swiftc -target arm64-apple-ios16.0 \
+                 -sdk "$SDK_PATH" \
+                 -parse-as-library \
+                 -O \
+                 -o build/FreeFireCompanion \
+                 $SWIFT_FILES
 
-      - name: Create Payload & IPA
+      - name: Package into IPA
         run: |
           mkdir -p Payload/FreeFireCompanion.app
           cp build/FreeFireCompanion Payload/FreeFireCompanion.app/
@@ -54,10 +50,6 @@ jobs:
               <string>1</string>
               <key>LSRequiresIPhoneOS</key>
               <true/>
-              <key>UILaunchStoryboardName</key>
-              <string>LaunchScreen</string>
-              <key>UIMainStoryboardFile</key>
-              <string></string>
               <key>UIRequiredDeviceCapabilities</key>
               <array>
                   <string>arm64</string>
@@ -67,13 +59,12 @@ jobs:
                   <string>UIInterfaceOrientationPortrait</string>
               </array>
           </dict>
-          </plist>
           EOF
 
           zip -r FreeFireCompanion.ipa Payload
 
       - name: Upload IPA Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: FreeFireCompanion-iOS-App
           path: FreeFireCompanion.ipa
