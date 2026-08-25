@@ -17,25 +17,27 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build EPZ GAME TURBO Executable (Swift 5.9 / iOS 16+)
+      - name: Build EPZ GAME TURBO Executable (iOS 13.0+ to iOS 18+)
         run: |
           mkdir -p build
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           SWIFT_FILES=$(find . -name "*.swift" -not -path "*/.*")
-          echo "Compiling EPZ Swift Source Files: $SWIFT_FILES"
+          echo "Compiling EPZ Swift Source Files for iOS 13.0+: $SWIFT_FILES"
           
-          xcrun swiftc -target arm64-apple-ios16.0 \
+          xcrun swiftc -target arm64-apple-ios13.0 \
                  -sdk "$SDK_PATH" \
                  -parse-as-library \
                  -framework SwiftUI \
                  -framework UIKit \
                  -framework Foundation \
                  -framework CoreGraphics \
+                 -framework QuartzCore \
+                 -framework AudioToolbox \
                  -O \
                  -o build/EPZGameTurbo \
                  $SWIFT_FILES
 
-      - name: Package Valid EPZ IPA with HTTP ATS Exception
+      - name: Package Valid EPZ IPA with Universal 120Hz & HTTP ATS Exception
         run: |
           rm -rf Payload EPZGameTurbo.ipa
           mkdir -p Payload/EPZGameTurbo.app
@@ -50,7 +52,7 @@ jobs:
           plutil -insert CFBundleShortVersionString -string "1.0" Payload/EPZGameTurbo.app/Info.plist
           plutil -insert CFBundleVersion -string "1" Payload/EPZGameTurbo.app/Info.plist
           plutil -insert LSRequiresIPhoneOS -bool true Payload/EPZGameTurbo.app/Info.plist
-          plutil -insert MinimumOSVersion -string "16.0" Payload/EPZGameTurbo.app/Info.plist
+          plutil -insert MinimumOSVersion -string "13.0" Payload/EPZGameTurbo.app/Info.plist
 
           # App Transport Security Exception for EPZ Wispbyte Server IP (http://78.154.103.8:15429)
           plutil -insert NSAppTransportSecurity -xml "<dict><key>NSAllowsArbitraryLoads</key><true/></dict>" Payload/EPZGameTurbo.app/Info.plist
@@ -64,7 +66,7 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add EPZGameTurbo.ipa manifest.plist index.html || true
-          git commit -m "Auto-update EPZ GAME TURBO build & OTA manifest" || true
+          git commit -m "Auto-update EPZ GAME TURBO build & Cyan theme" || true
           git push || true
 
       - name: Create GitHub Release with EPZ IPA
@@ -73,11 +75,13 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: EPZ GAME TURBO iOS v1.0.${{ github.run_number }}
           body: |
-            ⚡ **EPZ GAME TURBO — iOS High-Performance Gaming Companion**
+            ⚡ **EPZ GAME TURBO — Universal 120Hz Cyan Edition (iOS 13.0 to iOS 18+)**
             
+            - **Cyan Theme System**: High-contrast Neon Cyan (#00e5ff) UI.
+            - **RAM Cleaner**: Native malloc_zone_pressure_relief & Kernel Cache Eviction.
+            - **120Hz ProMotion Lock**: CADisplayLink preferredFrameRateRange 120Hz + High Priority QoS CPU Threading.
             - **License Server**: http://78.154.103.8:15429/validate
             - **Admin Panel**: http://78.154.103.8:15429/admin
-            - **Bundle Identifier**: com.epz.gameturbo
             
             📲 **1-Click Direct Wireless iPhone Install Link:**
             [itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/AKKi-bio/FreeFireCompanion/main/manifest.plist](itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/AKKi-bio/FreeFireCompanion/main/manifest.plist)
