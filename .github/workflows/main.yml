@@ -7,8 +7,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
   build-and-deploy-epz-turbo:
@@ -17,14 +15,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build EPZ GAME TURBO Executable (iOS 13.0+ to iOS 18+)
+      - name: Build EPZ GAME TURBO Executable (SwiftUI / iOS)
         run: |
           mkdir -p build
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           SWIFT_FILES=$(find . -name "*.swift" -not -path "*/.*")
-          echo "Compiling EPZ Swift Source Files for iOS 13.0+: $SWIFT_FILES"
+          echo "Compiling EPZ Swift Files: $SWIFT_FILES"
           
-          xcrun swiftc -target arm64-apple-ios13.0 \
+          xcrun swiftc -target arm64-apple-ios16.0 \
                  -sdk "$SDK_PATH" \
                  -parse-as-library \
                  -framework SwiftUI \
@@ -37,7 +35,7 @@ jobs:
                  -o build/EPZGameTurbo \
                  $SWIFT_FILES
 
-      - name: Package Valid EPZ IPA with Universal 120Hz & HTTP ATS Exception
+      - name: Package Valid EPZ IPA with HTTP ATS Exception
         run: |
           rm -rf Payload EPZGameTurbo.ipa
           mkdir -p Payload/EPZGameTurbo.app
@@ -61,13 +59,11 @@ jobs:
 
           zip -r EPZGameTurbo.ipa Payload
 
-      - name: Commit IPA & Manifest to Repository
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add EPZGameTurbo.ipa manifest.plist index.html || true
-          git commit -m "Auto-update EPZ GAME TURBO build & Cyan theme" || true
-          git push || true
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EPZGameTurbo-iOS-App
+          path: EPZGameTurbo.ipa
 
       - name: Create GitHub Release with EPZ IPA
         uses: softprops/action-gh-release@v1
@@ -79,7 +75,7 @@ jobs:
             
             - **Cyan Theme System**: High-contrast Neon Cyan (#00e5ff) UI.
             - **RAM Cleaner**: Native malloc_zone_pressure_relief & Kernel Cache Eviction.
-            - **120Hz ProMotion Lock**: CADisplayLink preferredFrameRateRange 120Hz + High Priority QoS CPU Threading.
+            - **120Hz ProMotion Lock**: CADisplayLink preferredFrameRateRange 120Hz.
             - **License Server**: http://78.154.103.8:15429/validate
             - **Admin Panel**: http://78.154.103.8:15429/admin
             
