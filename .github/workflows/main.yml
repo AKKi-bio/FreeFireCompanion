@@ -1,4 +1,4 @@
-name: Free iOS 1-Click OTA Direct Installer
+name: EPZ GAME TURBO iOS Build & Release
 
 on:
   push:
@@ -11,17 +11,18 @@ permissions:
   id-token: write
 
 jobs:
-  build-and-deploy-ota:
+  build-and-deploy-epz-turbo:
     runs-on: macos-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build iOS App Executable
+      - name: Build EPZ GAME TURBO Executable (Swift 5.9 / iOS 16+)
         run: |
           mkdir -p build
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           SWIFT_FILES=$(find . -name "*.swift" -not -path "*/.*")
+          echo "Compiling EPZ Swift Source Files: $SWIFT_FILES"
           
           xcrun swiftc -target arm64-apple-ios16.0 \
                  -sdk "$SDK_PATH" \
@@ -31,47 +32,56 @@ jobs:
                  -framework Foundation \
                  -framework CoreGraphics \
                  -O \
-                 -o build/FreeFireCompanion \
+                 -o build/EPZGameTurbo \
                  $SWIFT_FILES
 
-      - name: Package Valid IPA
+      - name: Package Valid EPZ IPA with HTTP ATS Exception
         run: |
-          rm -rf Payload FreeFireCompanion.ipa
-          mkdir -p Payload/FreeFireCompanion.app
+          rm -rf Payload EPZGameTurbo.ipa
+          mkdir -p Payload/EPZGameTurbo.app
           
-          cp build/FreeFireCompanion Payload/FreeFireCompanion.app/
+          cp build/EPZGameTurbo Payload/EPZGameTurbo.app/
           
-          plutil -create xml1 Payload/FreeFireCompanion.app/Info.plist
-          plutil -insert CFBundleExecutable -string "FreeFireCompanion" Payload/FreeFireCompanion.app/Info.plist
-          plutil -insert CFBundleIdentifier -string "com.freefire.companion" Payload/FreeFireCompanion.app/Info.plist
-          plutil -insert CFBundleName -string "FF Companion" Payload/FreeFireCompanion.app/Info.plist
-          plutil -insert CFBundlePackageType -string "APPL" Payload/FreeFireCompanion.app/Info.plist
-          plutil -insert CFBundleShortVersionString -string "1.0" Payload/FreeFireCompanion.app/Info.plist
-          plutil -insert CFBundleVersion -string "1" Payload/FreeFireCompanion.app/Info.plist
-          plutil -insert LSRequiresIPhoneOS -bool true Payload/FreeFireCompanion.app/Info.plist
-          plutil -insert MinimumOSVersion -string "16.0" Payload/FreeFireCompanion.app/Info.plist
+          plutil -create xml1 Payload/EPZGameTurbo.app/Info.plist
+          plutil -insert CFBundleExecutable -string "EPZGameTurbo" Payload/EPZGameTurbo.app/Info.plist
+          plutil -insert CFBundleIdentifier -string "com.epz.gameturbo" Payload/EPZGameTurbo.app/Info.plist
+          plutil -insert CFBundleName -string "EPZ Turbo" Payload/EPZGameTurbo.app/Info.plist
+          plutil -insert CFBundlePackageType -string "APPL" Payload/EPZGameTurbo.app/Info.plist
+          plutil -insert CFBundleShortVersionString -string "1.0" Payload/EPZGameTurbo.app/Info.plist
+          plutil -insert CFBundleVersion -string "1" Payload/EPZGameTurbo.app/Info.plist
+          plutil -insert LSRequiresIPhoneOS -bool true Payload/EPZGameTurbo.app/Info.plist
+          plutil -insert MinimumOSVersion -string "16.0" Payload/EPZGameTurbo.app/Info.plist
 
-          plutil -convert binary1 Payload/FreeFireCompanion.app/Info.plist
+          # App Transport Security Exception for EPZ Wispbyte Server IP (http://78.154.103.8:15429)
+          plutil -insert NSAppTransportSecurity -xml "<dict><key>NSAllowsArbitraryLoads</key><true/></dict>" Payload/EPZGameTurbo.app/Info.plist
 
-          zip -r FreeFireCompanion.ipa Payload
+          plutil -convert binary1 Payload/EPZGameTurbo.app/Info.plist
+
+          zip -r EPZGameTurbo.ipa Payload
 
       - name: Commit IPA & Manifest to Repository
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add FreeFireCompanion.ipa manifest.plist || true
-          git commit -m "Auto-update compiled IPA for 1-click OTA install" || true
+          git add EPZGameTurbo.ipa manifest.plist index.html || true
+          git commit -m "Auto-update EPZ GAME TURBO build & OTA manifest" || true
           git push || true
 
-      - name: Create GitHub Release with IPA
+      - name: Create GitHub Release with EPZ IPA
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: Free Fire Companion iOS v1.0.${{ github.run_number }}
+          name: EPZ GAME TURBO iOS v1.0.${{ github.run_number }}
           body: |
+            ⚡ **EPZ GAME TURBO — iOS High-Performance Gaming Companion**
+            
+            - **License Server**: http://78.154.103.8:15429/validate
+            - **Admin Panel**: http://78.154.103.8:15429/admin
+            - **Bundle Identifier**: com.epz.gameturbo
+            
             📲 **1-Click Direct Wireless iPhone Install Link:**
             [itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/AKKi-bio/FreeFireCompanion/main/manifest.plist](itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/AKKi-bio/FreeFireCompanion/main/manifest.plist)
           files: |
-            FreeFireCompanion.ipa
+            EPZGameTurbo.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
