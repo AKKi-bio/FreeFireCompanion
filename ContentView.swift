@@ -2,7 +2,7 @@
 //  ContentView.swift
 //  EPZ GAME TURBO iOS
 //
-//  Complete Master Production Application Suite
+//  100% Self-Contained Master Production Application Suite
 //
 
 import SwiftUI
