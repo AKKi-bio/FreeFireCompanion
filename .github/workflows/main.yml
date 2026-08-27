@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   build-and-deploy-epz-turbo:
@@ -18,8 +19,9 @@ jobs:
       - name: Build EPZ GAME TURBO iOS Executable (Master Bundle)
         run: |
           mkdir -p build
+          echo "Compiling ContentView.swift directly..."
           
-          # Compile ContentView.swift as the master application bundle
+          # Explicitly compile master ContentView.swift file
           xcrun swiftc -target arm64-apple-ios16.0 \
                  -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" \
                  -parse-as-library \
@@ -35,7 +37,7 @@ jobs:
                  -o build/EPZGameTurbo \
                  ContentView.swift
 
-      - name: Package Valid EPZ IPA with HTTP ATS Exception & Queries Schemes
+      - name: Package Valid EPZ IPA
         run: |
           rm -rf Payload EPZGameTurbo.ipa
           mkdir -p Payload/EPZGameTurbo.app
@@ -63,16 +65,17 @@ jobs:
           zip -9 -r EPZGameTurbo.ipa Payload
           ls -lh EPZGameTurbo.ipa
 
-      - name: Upload IPA Artifact
+      - name: Upload IPA Build Artifact (Direct Download from Actions Summary)
         uses: actions/upload-artifact@v4
         with:
           name: EPZGameTurbo-iOS-App
           path: EPZGameTurbo.ipa
 
       - name: Create GitHub Release with EPZ IPA
+        continue-on-error: true
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v1.0.${{ github.run_number }}
+          tag_name: release-v${{ github.run_number }}
           name: EPZ GAME TURBO PRO iOS v1.0.${{ github.run_number }}
           body: |
             ⚡ **EPZ GAME TURBO iOS — Production-Grade Gaming Tool & Floating HUD**
@@ -82,9 +85,6 @@ jobs:
             - **Floating In-Game HUD**: Live RAM (mach_host_basic_info), Ping (1.1.1.1), and Thermal State monitor.
             - **In-Match Sensitivity Panel**: Tap Sensitivity, Swipe Responsiveness, Micro Control Accuracy (5-step levels: Lowest to Highest) with haptic toast notifications.
             - **Pro Dashboard**: 1-Tap RAM Memory Purger & Free Fire Quick Launch shortcut.
-            
-            📲 **1-Click Direct Wireless iPhone Install Link:**
-            [itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/AKKi-bio/FreeFireCompanion/main/manifest.plist](itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/AKKi-bio/FreeFireCompanion/main/manifest.plist)
           files: |
             EPZGameTurbo.ipa
         env:
