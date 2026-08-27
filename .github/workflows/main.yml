@@ -20,8 +20,11 @@ jobs:
       - name: Build EPZ GAME TURBO Executable
         run: |
           mkdir -p build
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          
+          # Compile main.swift directly as top-level executable
           xcrun swiftc -target arm64-apple-ios16.0 \
-                 -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" \
+                 -sdk "$SDK_PATH" \
                  -framework SwiftUI \
                  -framework UIKit \
                  -framework Foundation \
