@@ -1,13 +1,7 @@
-//
-//  ContentView.swift
-//  EPZ GAME TURBO iOS
-//
-//  100% Self-Contained Standalone iOS Executable Suite
-//
-
 import SwiftUI
 import UIKit
 import Combine
+import Darwin
 import MachO
 import QuartzCore
 import AudioToolbox
@@ -22,9 +16,3 @@ struct EPZGameTurboApp: App {
         }
     }
 }
-
-// MARK: - ROOT CONTENT VIEW & FLOATING OVERLAY CONTAINER
-struct ContentView: View {
-    @ObservedObject var licenseManager = LicenseManager.shared
-    @ObservedObject var overlayManager = OverlayManager.shared
-    @State private var selectedTab = 0
