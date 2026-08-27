@@ -15,15 +15,13 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build EPZ GAME TURBO iOS Executable (Swift 5.9 / SwiftUI)
+      - name: Build EPZ GAME TURBO iOS Executable (Master Bundle)
         run: |
           mkdir -p build
-          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
-          SWIFT_FILES=$(find . -name "*.swift" -not -path "*/.*")
-          echo "Compiling EPZ Swift Engine: $SWIFT_FILES"
           
+          # Compile ContentView.swift as the master application bundle
           xcrun swiftc -target arm64-apple-ios16.0 \
-                 -sdk "$SDK_PATH" \
+                 -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" \
                  -parse-as-library \
                  -framework SwiftUI \
                  -framework UIKit \
@@ -35,7 +33,7 @@ jobs:
                  -whole-module-optimization \
                  -Xlinker -dead_strip \
                  -o build/EPZGameTurbo \
-                 $SWIFT_FILES
+                 ContentView.swift
 
       - name: Package Valid EPZ IPA with HTTP ATS Exception & Queries Schemes
         run: |
