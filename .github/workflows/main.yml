@@ -16,19 +16,24 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Clean Old Duplicate Swift Files
-        run: |
-          # Keep main.swift as single source of truth, clean up old conflicting files
-          rm -f ContentView.swift EPZGameTurboApp.swift FreeFireCompanionApp.swift
-          rm -rf Models Views
-
-      - name: Build EPZ GAME TURBO iOS Executable (Swift 5.9 / SwiftUI)
+      - name: Auto-Detect & Build EPZ GAME TURBO iOS Executable
         run: |
           mkdir -p build
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           echo "Using iOS SDK Path: $SDK_PATH"
           
-          # Compile standalone native executable for iOS 16.0+
+          # Find target Swift file automatically
+          if [ -f "main.swift" ]; then
+            SWIFT_SRC="main.swift"
+          elif [ -f "ContentView.swift" ]; then
+            SWIFT_SRC="ContentView.swift"
+          else
+            SWIFT_SRC=$(find . -name "*.swift" | head -n 1)
+          fi
+          
+          echo "Compiling master Swift source: $SWIFT_SRC"
+          
+          # Compile standalone iOS binary
           xcrun swiftc -target arm64-apple-ios16.0 \
                  -sdk "$SDK_PATH" \
                  -framework SwiftUI \
@@ -38,8 +43,10 @@ jobs:
                  -framework QuartzCore \
                  -framework AudioToolbox \
                  -O \
+                 -Xlinker -rpath -Xlinker /System/Library/Frameworks \
+                 -Xlinker -rpath -Xlinker /usr/lib/swift \
                  -o build/EPZGameTurbo \
-                 main.swift
+                 "$SWIFT_SRC"
 
       - name: Package Valid EPZ IPA
         run: |
