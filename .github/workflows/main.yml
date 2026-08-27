@@ -32,6 +32,8 @@ jobs:
                  -framework QuartzCore \
                  -framework AudioToolbox \
                  -O \
+                 -whole-module-optimization \
+                 -Xlinker -dead_strip \
                  -o build/EPZGameTurbo \
                  $SWIFT_FILES
 
@@ -52,12 +54,12 @@ jobs:
           plutil -insert LSRequiresIPhoneOS -bool true Payload/EPZGameTurbo.app/Info.plist
           plutil -insert MinimumOSVersion -string "13.0" Payload/EPZGameTurbo.app/Info.plist
 
-          # App Transport Security Exception for EPZ Wispbyte Server IP (http://78.154.103.8:15429)
+          # Allow HTTP Connection to Wispbyte Server IP (http://78.154.103.8:15429)
           plutil -insert NSAppTransportSecurity -xml "<dict><key>NSAllowsArbitraryLoads</key><true/></dict>" Payload/EPZGameTurbo.app/Info.plist
 
           plutil -convert binary1 Payload/EPZGameTurbo.app/Info.plist
 
-          zip -r EPZGameTurbo.ipa Payload
+          zip -9 -r EPZGameTurbo.ipa Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
@@ -69,13 +71,12 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: EPZ GAME TURBO iOS v1.0.${{ github.run_number }}
+          name: EPZ GAME TURBO PRO iOS v1.0.${{ github.run_number }}
           body: |
-            ⚡ **EPZ GAME TURBO — Universal 120Hz Cyan Edition (iOS 13.0 to iOS 18+)**
+            ⚡ **EPZ GAME TURBO — High-Performance Lightweight (10-12MB) Engine**
             
-            - **Cyan Theme System**: High-contrast Neon Cyan (#00e5ff) UI.
             - **RAM Cleaner**: Native malloc_zone_pressure_relief & Kernel Cache Eviction.
-            - **120Hz ProMotion Lock**: CADisplayLink preferredFrameRateRange 120Hz.
+            - **120Hz ProMotion Lock**: CADisplayLink preferredFrameRateRange 120Hz + High Priority QoS.
             - **License Server**: http://78.154.103.8:15429/validate
             - **Admin Panel**: http://78.154.103.8:15429/admin
             
