@@ -7,35 +7,22 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   build-and-deploy-epz-turbo:
     runs-on: macos-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Auto-Detect & Build EPZ GAME TURBO iOS Executable
+      - name: Clean Extra Swift Files
+        run: rm -f EPZGameTurboApp.swift FreeFireCompanionApp.swift main.swift
+
+      - name: Compile Master Executable
         run: |
           mkdir -p build
-          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
-          echo "Using iOS SDK Path: $SDK_PATH"
-          
-          # Find target Swift file automatically
-          if [ -f "main.swift" ]; then
-            SWIFT_SRC="main.swift"
-          elif [ -f "ContentView.swift" ]; then
-            SWIFT_SRC="ContentView.swift"
-          else
-            SWIFT_SRC=$(find . -name "*.swift" | head -n 1)
-          fi
-          
-          echo "Compiling master Swift source: $SWIFT_SRC"
-          
-          # Compile standalone iOS binary
           xcrun swiftc -target arm64-apple-ios16.0 \
-                 -sdk "$SDK_PATH" \
+                 -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" \
+                 -parse-as-library \
                  -framework SwiftUI \
                  -framework UIKit \
                  -framework Foundation \
@@ -43,16 +30,13 @@ jobs:
                  -framework QuartzCore \
                  -framework AudioToolbox \
                  -O \
-                 -Xlinker -rpath -Xlinker /System/Library/Frameworks \
-                 -Xlinker -rpath -Xlinker /usr/lib/swift \
                  -o build/EPZGameTurbo \
-                 "$SWIFT_SRC"
+                 ContentView.swift
 
-      - name: Package Valid EPZ IPA
+      - name: Package IPA
         run: |
           rm -rf Payload EPZGameTurbo.ipa
           mkdir -p Payload/EPZGameTurbo.app
-          
           cp build/EPZGameTurbo Payload/EPZGameTurbo.app/
           
           plutil -create xml1 Payload/EPZGameTurbo.app/Info.plist
@@ -64,39 +48,20 @@ jobs:
           plutil -insert CFBundleVersion -string "1" Payload/EPZGameTurbo.app/Info.plist
           plutil -insert LSRequiresIPhoneOS -bool true Payload/EPZGameTurbo.app/Info.plist
           plutil -insert MinimumOSVersion -string "13.0" Payload/EPZGameTurbo.app/Info.plist
-
-          # Allow HTTP Wispbyte Server Access (http://78.154.103.8:15429)
           plutil -insert NSAppTransportSecurity -xml "<dict><key>NSAllowsArbitraryLoads</key><true/></dict>" Payload/EPZGameTurbo.app/Info.plist
-
-          # Free Fire URL Schemes
-          plutil -insert LSApplicationQueriesSchemes -xml "<array><string>garenaff</string><string>freefire</string></array>" Payload/EPZGameTurbo.app/Info.plist
-
           plutil -convert binary1 Payload/EPZGameTurbo.app/Info.plist
-
           zip -9 -r EPZGameTurbo.ipa Payload
-          ls -lh EPZGameTurbo.ipa
 
-      - name: Upload IPA Build Artifact (Direct Download from Actions Summary)
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: EPZGameTurbo-iOS-App
           path: EPZGameTurbo.ipa
 
-      - name: Create GitHub Release with EPZ IPA
+      - uses: softprops/action-gh-release@v1
         continue-on-error: true
-        uses: softprops/action-gh-release@v1
         with:
           tag_name: release-v${{ github.run_number }}
           name: EPZ GAME TURBO PRO iOS v1.0.${{ github.run_number }}
-          body: |
-            ⚡ **EPZ GAME TURBO iOS — Production-Grade Gaming Tool & Floating HUD**
-            
-            - **Design & Theme**: Cyberpunk Dark Mode (#0A0A0A) & Electric Cyan (#00E5FF) accent styling.
-            - **Wispbyte License API**: Connected to http://78.154.103.8:15429/validate with HWID vendor lock.
-            - **Floating In-Game HUD**: Live RAM (mach_host_basic_info), Ping (1.1.1.1), and Thermal State monitor.
-            - **In-Match Sensitivity Panel**: Tap Sensitivity, Swipe Responsiveness, Micro Control Accuracy (5-step levels: Lowest to Highest) with haptic toast notifications.
-            - **Pro Dashboard**: 1-Tap RAM Memory Purger & Free Fire Quick Launch shortcut.
-          files: |
-            EPZGameTurbo.ipa
+          files: EPZGameTurbo.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
