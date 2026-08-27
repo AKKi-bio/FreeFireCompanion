@@ -16,15 +16,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build EPZ GAME TURBO iOS Executable (Master Bundle)
+      - name: Build EPZ GAME TURBO iOS Executable (Native Swift Entrypoint)
         run: |
           mkdir -p build
-          echo "Compiling ContentView.swift directly..."
+          echo "Compiling main.swift directly..."
           
-          # Compile standalone executable for iOS 16.0+
+          # Compile standalone native executable for iOS 16.0+
           xcrun swiftc -target arm64-apple-ios16.0 \
                  -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" \
-                 -emit-executable \
                  -framework SwiftUI \
                  -framework UIKit \
                  -framework Foundation \
@@ -33,7 +32,7 @@ jobs:
                  -framework AudioToolbox \
                  -O \
                  -o build/EPZGameTurbo \
-                 ContentView.swift
+                 main.swift
 
       - name: Package Valid EPZ IPA
         run: |
