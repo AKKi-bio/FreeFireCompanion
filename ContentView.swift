@@ -2,7 +2,7 @@
 //  ContentView.swift
 //  EPZ GAME TURBO iOS
 //
-//  100% Self-Contained Master Production Application Suite
+//  100% Self-Contained Standalone iOS Executable Suite
 //
 
 import SwiftUI
@@ -12,14 +12,21 @@ import MachO
 import QuartzCore
 import AudioToolbox
 
-// MARK: - MAIN APP ENTRYPOINT
-@main
+// MARK: - APP MAIN ENGINE ENTRYPOINT
 struct EPZGameTurboApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .preferredColorScheme(.dark)
         }
+    }
+}
+
+// Global Main Invocation for swiftc compiler
+@main
+struct AppEntryPoint {
+    static func main() {
+        EPZGameTurboApp.main()
     }
 }
 
