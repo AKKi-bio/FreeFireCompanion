@@ -15,12 +15,12 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build EPZ GAME TURBO Executable (SwiftUI / iOS)
+      - name: Build EPZ GAME TURBO iOS Executable (Swift 5.9 / SwiftUI)
         run: |
           mkdir -p build
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           SWIFT_FILES=$(find . -name "*.swift" -not -path "*/.*")
-          echo "Compiling EPZ Swift Files: $SWIFT_FILES"
+          echo "Compiling EPZ Swift Engine: $SWIFT_FILES"
           
           xcrun swiftc -target arm64-apple-ios16.0 \
                  -sdk "$SDK_PATH" \
@@ -37,7 +37,7 @@ jobs:
                  -o build/EPZGameTurbo \
                  $SWIFT_FILES
 
-      - name: Package Valid EPZ IPA with HTTP ATS Exception
+      - name: Package Valid EPZ IPA with HTTP ATS Exception & Queries Schemes
         run: |
           rm -rf Payload EPZGameTurbo.ipa
           mkdir -p Payload/EPZGameTurbo.app
@@ -54,12 +54,16 @@ jobs:
           plutil -insert LSRequiresIPhoneOS -bool true Payload/EPZGameTurbo.app/Info.plist
           plutil -insert MinimumOSVersion -string "13.0" Payload/EPZGameTurbo.app/Info.plist
 
-          # Allow HTTP Connection to Wispbyte Server IP (http://78.154.103.8:15429)
+          # Allow HTTP Wispbyte Server Access (http://78.154.103.8:15429)
           plutil -insert NSAppTransportSecurity -xml "<dict><key>NSAllowsArbitraryLoads</key><true/></dict>" Payload/EPZGameTurbo.app/Info.plist
+
+          # Free Fire URL Schemes
+          plutil -insert LSApplicationQueriesSchemes -xml "<array><string>garenaff</string><string>freefire</string></array>" Payload/EPZGameTurbo.app/Info.plist
 
           plutil -convert binary1 Payload/EPZGameTurbo.app/Info.plist
 
           zip -9 -r EPZGameTurbo.ipa Payload
+          ls -lh EPZGameTurbo.ipa
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
@@ -73,12 +77,13 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: EPZ GAME TURBO PRO iOS v1.0.${{ github.run_number }}
           body: |
-            ⚡ **EPZ GAME TURBO — High-Performance Lightweight (10-12MB) Engine**
+            ⚡ **EPZ GAME TURBO iOS — Production-Grade Gaming Tool & Floating HUD**
             
-            - **RAM Cleaner**: Native malloc_zone_pressure_relief & Kernel Cache Eviction.
-            - **120Hz ProMotion Lock**: CADisplayLink preferredFrameRateRange 120Hz + High Priority QoS.
-            - **License Server**: http://78.154.103.8:15429/validate
-            - **Admin Panel**: http://78.154.103.8:15429/admin
+            - **Design & Theme**: Cyberpunk Dark Mode (#0A0A0A) & Electric Cyan (#00E5FF) accent styling.
+            - **Wispbyte License API**: Connected to http://78.154.103.8:15429/validate with HWID vendor lock.
+            - **Floating In-Game HUD**: Live RAM (mach_host_basic_info), Ping (1.1.1.1), and Thermal State monitor.
+            - **In-Match Sensitivity Panel**: Tap Sensitivity, Swipe Responsiveness, Micro Control Accuracy (5-step levels: Lowest to Highest) with haptic toast notifications.
+            - **Pro Dashboard**: 1-Tap RAM Memory Purger & Free Fire Quick Launch shortcut.
             
             📲 **1-Click Direct Wireless iPhone Install Link:**
             [itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/AKKi-bio/FreeFireCompanion/main/manifest.plist](itms-services://?action=download-manifest&url=https://raw.githubusercontent.com/AKKi-bio/FreeFireCompanion/main/manifest.plist)
