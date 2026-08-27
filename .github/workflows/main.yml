@@ -16,14 +16,21 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Build EPZ GAME TURBO iOS Executable (Native Swift Entrypoint)
+      - name: Clean Old Duplicate Swift Files
+        run: |
+          # Keep main.swift as single source of truth, clean up old conflicting files
+          rm -f ContentView.swift EPZGameTurboApp.swift FreeFireCompanionApp.swift
+          rm -rf Models Views
+
+      - name: Build EPZ GAME TURBO iOS Executable (Swift 5.9 / SwiftUI)
         run: |
           mkdir -p build
-          echo "Compiling main.swift directly..."
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "Using iOS SDK Path: $SDK_PATH"
           
           # Compile standalone native executable for iOS 16.0+
           xcrun swiftc -target arm64-apple-ios16.0 \
-                 -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" \
+                 -sdk "$SDK_PATH" \
                  -framework SwiftUI \
                  -framework UIKit \
                  -framework Foundation \
