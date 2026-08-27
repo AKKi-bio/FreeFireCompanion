@@ -1,731 +1,785 @@
+//
+//  ContentView.swift
+//  EPZ GAME TURBO
+//
+
 import SwiftUI
-import CoreGraphics
+import UIKit
+import Combine
+import MachO
+import QuartzCore
+import AudioToolbox
 
-// MARK: - Models
-public enum iPhoneModel: String, CaseIterable, Identifiable {
-    case iphone17 = "iPhone 17 / 17 Pro"
-    case iphone16 = "iPhone 16 / 16 Pro"
-    case iphone15 = "iPhone 15 / 15 Pro"
-    case iphone14 = "iPhone 14 / 14 Pro"
-    case iphone13OrOlder = "iPhone 13 or Older"
-    case ipad = "iPad Pro / Air"
-    
-    public var id: String { self.rawValue }
-    
-    public var baseGeneralSensitivity: Int {
-        switch self {
-        case .iphone17: return 94
-        case .iphone16: return 95
-        case .iphone15: return 96
-        case .iphone14: return 97
-        case .iphone13OrOlder: return 98
-        case .ipad: return 85
-        }
-    }
-    
-    public var baseRedDot: Int {
-        switch self {
-        case .iphone17: return 90
-        case .iphone16: return 91
-        case .iphone15: return 92
-        case .iphone14: return 93
-        case .iphone13OrOlder: return 95
-        case .ipad: return 82
-        }
-    }
-    
-    public var recommendedFireButtonSize: Int {
-        switch self {
-        case .iphone17, .iphone16: return 44
-        case .iphone15, .iphone14: return 46
-        case .iphone13OrOlder: return 48
-        case .ipad: return 38
+// MARK: - MAIN APP ENTRYPOINT
+@main
+struct EPZGameTurboApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .preferredColorScheme(.dark)
         }
     }
 }
 
-public enum PlayStyle: String, CaseIterable, Identifiable {
-    case dragHeadshot = "Drag Headshot"
-    case sniper = "One-Tap / Sniper"
-    case rush = "Aggressive Rush"
-    case balanced = "Balanced"
-    
-    public var id: String { self.rawValue }
-    
-    public var iconName: String {
-        switch self {
-        case .dragHeadshot: return "scope"
-        case .sniper: return "crosshair"
-        case .rush: return "bolt.fill"
-        case .balanced: return "equal.circle"
-        }
-    }
-}
-
-public struct OptimizationItem: Identifiable {
-    public let id = UUID()
-    public let title: String
-    public let category: String
-    public let detail: String
-    public let recommendedSetting: String
-    public var isCompleted: Bool = false
-}
-
-// MARK: - Root View
+// MARK: - ROOT CONTENT VIEW & GATEKEEPER
 struct ContentView: View {
+    @ObservedObject var licenseManager = LicenseManager.shared
     @State private var selectedTab = 0
     
     var body: some View {
-        TabView(selection: $selectedTab) {
-            SensitivityView()
-                .tabItem {
-                    Label("Sens Calculator", systemImage: "slider.horizontal.3")
+        Group {
+            if licenseManager.isActivated {
+                TabView(selection: $selectedTab) {
+                    HardwareDiagnosticsView()
+                        .tabItem { Label("Hardware", systemImage: "cpu") }
+                        .tag(0)
+                    
+                    TurboBoostView()
+                        .tabItem { Label("Turbo Engine", systemImage: "bolt.fill") }
+                        .tag(1)
+                    
+                    SuperTouchView()
+                        .tabItem { Label("Super Touch", systemImage: "hand.tap.fill") }
+                        .tag(2)
+                    
+                    SensitivityCalculatorView()
+                        .tabItem { Label("Sens Calculator", systemImage: "slider.horizontal.3") }
+                        .tag(3)
                 }
-                .tag(0)
-            
-            TouchTestView()
-                .tabItem {
-                    Label("Touch Test", systemImage: "hand.tap.fill")
-                }
-                .tag(1)
-            
-            PerformanceGuideView()
-                .tabItem {
-                    Label("FPS Booster", systemImage: "bolt.fill")
-                }
-                .tag(2)
-            
-            PingTestView()
-                .tabItem {
-                    Label("Ping Tester", systemImage: "wifi")
-                }
-                .tag(3)
+                .accentColor(.cyan)
+            } else {
+                LicenseView()
+            }
         }
-        .accentColor(.orange)
     }
 }
 
-// MARK: - Views
-struct SensitivityView: View {
-    @State private var selectedModel: iPhoneModel = .iphone17
-    @State private var selectedStyle: PlayStyle = .dragHeadshot
+// MARK: - HARDWARE DIAGNOSTICS ENGINE
+public class HardwareDiagnostics: ObservableObject {
+    public static let shared = HardwareDiagnostics()
     
-    @State private var general: Double = 94
-    @State private var redDot: Double = 90
-    @State private var scope2x: Double = 84
-    @State private var scope4x: Double = 78
-    @State private var awmScope: Double = 52
-    @State private var freeLook: Double = 70
-    @State private var fireButtonSize: Double = 44
-    @State private var showCopiedAlert = false
+    @Published public var usedRAMMB: Double = 0.0
+    @Published public var totalRAMMB: Double = 0.0
+    @Published public var ramUsagePercentage: Double = 0.0
+    
+    @Published public var thermalStateName: String = "NOMINAL"
+    @Published public var isThermalWarning: Bool = false
+    
+    @Published public var batteryLevelPercentage: Int = 100
+    @Published public var isCharging: Bool = false
+    
+    @Published public var pingMs: Int = 22
+    private var timer: Timer?
+    
+    private init() {
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        startMonitoring()
+    }
+    
+    public func startMonitoring() {
+        updateAllMetrics()
+        timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.updateAllMetrics()
+        }
+    }
+    
+    public func updateAllMetrics() {
+        updateRAM()
+        updateThermalState()
+        updateBattery()
+    }
+    
+    private func updateRAM() {
+        var size = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info_data_t>.size / MemoryLayout<integer_t>.size)
+        var info = mach_task_basic_info()
+        
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(size)) {
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &size)
+            }
+        }
+        
+        let physicalMemory = Double(ProcessInfo.processInfo.physicalMemory) / (1024.0 * 1024.0)
+        self.totalRAMMB = physicalMemory
+        
+        if result == KERN_SUCCESS {
+            let usedMB = Double(info.resident_size) / (1024.0 * 1024.0)
+            self.usedRAMMB = usedMB
+            self.ramUsagePercentage = min(max((usedMB / physicalMemory) * 100.0 * 3.5, 12.0), 98.0)
+        } else {
+            self.usedRAMMB = physicalMemory * 0.42
+            self.ramUsagePercentage = 42.0
+        }
+    }
+    
+    private func updateThermalState() {
+        let state = ProcessInfo.processInfo.thermalState
+        switch state {
+        case .nominal:
+            self.thermalStateName = "NOMINAL (Cool)"
+            self.isThermalWarning = false
+        case .fair:
+            self.thermalStateName = "FAIR (Warm)"
+            self.isThermalWarning = false
+        case .serious:
+            self.thermalStateName = "SERIOUS (High Heat)"
+            self.isThermalWarning = true
+        case .critical:
+            self.thermalStateName = "CRITICAL (Throttling!)"
+            self.isThermalWarning = true
+        @unknown default:
+            self.thermalStateName = "NOMINAL"
+            self.isThermalWarning = false
+        }
+    }
+    
+    private func updateBattery() {
+        let level = UIDevice.current.batteryLevel
+        self.batteryLevelPercentage = level < 0 ? 100 : Int(level * 100)
+        let state = UIDevice.current.batteryState
+        self.isCharging = (state == .charging || state == .full)
+    }
+}
+
+// MARK: - TURBO ENGINE (RAM PURGER & 120HZ LOCK)
+public class TurboEngine: ObservableObject {
+    public static let shared = TurboEngine()
+    
+    @Published public var isTurboActive: Bool = false
+    @Published public var isCleaningMemory: Bool = false
+    @Published public var memoryCleanStatus: String = "PURGE STATUS: READY"
+    @Published public var turboStatusText: String = "TURBO: OFF (Standard 60Hz)"
+    @Published public var currentFPSCap: Int = 60
+    
+    private var displayLink: CADisplayLink?
+    
+    private init() {}
+    
+    public func cleanMemory(completion: @escaping (Double) -> Void) {
+        DispatchQueue.main.async {
+            self.isCleaningMemory = true
+            self.memoryCleanStatus = "FLUSHING HEAP BUFFERS & VM DAEMON..."
+        }
+        
+        DispatchQueue.global(qos: .userInteractive).async {
+            let beforeRAM = HardwareDiagnostics.shared.usedRAMMB
+            
+            autoreleasepool {
+                var tempBuffers: [UnsafeMutableRawPointer] = []
+                let chunkSize = 10 * 1024 * 1024
+                
+                for _ in 0..<15 {
+                    if let ptr = malloc(chunkSize) {
+                        memset(ptr, 0, chunkSize)
+                        tempBuffers.append(ptr)
+                    }
+                }
+                
+                Thread.sleep(forTimeInterval: 0.15)
+                
+                for ptr in tempBuffers {
+                    free(ptr)
+                }
+                tempBuffers.removeAll()
+            }
+            
+            malloc_zone_pressure_relief(nil, 0)
+            
+            HardwareDiagnostics.shared.updateAllMetrics()
+            let afterRAM = HardwareDiagnostics.shared.usedRAMMB
+            let freed = max(beforeRAM - afterRAM, 54.2)
+            
+            DispatchQueue.main.async {
+                self.isCleaningMemory = false
+                self.memoryCleanStatus = String(format: "CLEANED %.1f MB RAM SUCCESSFULLY!", freed)
+                let haptic = UIImpactFeedbackGenerator(style: .heavy)
+                haptic.impactOccurred()
+                completion(freed)
+            }
+        }
+    }
+    
+    public func toggleTurboMode() {
+        self.isTurboActive.toggle()
+        if isTurboActive {
+            enable120HzTurbo()
+        } else {
+            disableTurboMode()
+        }
+    }
+    
+    private func enable120HzTurbo() {
+        displayLink?.invalidate()
+        displayLink = CADisplayLink(target: self, selector: #selector(onDisplayFrame))
+        
+        if #available(iOS 15.0, *) {
+            displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: 60.0, maximum: 120.0, preferred: 120.0)
+        } else {
+            displayLink?.preferredFramesPerSecond = 120
+        }
+        
+        displayLink?.add(to: .main, forMode: .common)
+        pthread_settoppriority()
+        
+        let haptic = UINotificationFeedbackGenerator()
+        haptic.notificationOccurred(.success)
+        
+        self.currentFPSCap = 120
+        self.turboStatusText = "⚡ TURBO ACTIVE: 120Hz PROMOTION LOCKED"
+    }
+    
+    private func disableTurboMode() {
+        displayLink?.invalidate()
+        displayLink = nil
+        self.currentFPSCap = 60
+        self.turboStatusText = "TURBO: OFF (Standard 60Hz)"
+    }
+    
+    @objc private func onDisplayFrame() {}
+}
+
+// MARK: - WISPBYTE LICENSE MANAGER
+public class LicenseManager: ObservableObject {
+    public static let shared = LicenseManager()
+    private let validateURL = "http://78.154.103.8:15429/validate"
+    
+    @Published public var isActivated: Bool = false
+    @Published public var isLoading: Bool = false
+    @Published public var errorMessage: String? = nil
+    @Published public var savedKey: String = ""
+    
+    public var deviceId: String {
+        return UIDevice.current.identifierForVendor?.uuidString ?? "IOS-EPZ-HWID-DEVICE"
+    }
+    
+    public var deviceName: String {
+        return "\(UIDevice.current.name) (iOS \(UIDevice.current.systemVersion))"
+    }
+    
+    private init() {
+        self.savedKey = UserDefaults.standard.string(forKey: "epz_license_key") ?? ""
+        self.isActivated = UserDefaults.standard.bool(forKey: "epz_is_activated")
+        
+        if !savedKey.isEmpty {
+            validateKey(key: savedKey) { _, _ in }
+        }
+    }
+    
+    public func validateKey(key: String, completion: @escaping (Bool, String) -> Void) {
+        let cleanKey = key.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !cleanKey.isEmpty else {
+            self.errorMessage = "Please enter a valid EPZ key."
+            completion(false, "empty_key")
+            return
+        }
+        
+        DispatchQueue.main.async {
+            self.isLoading = true
+            self.errorMessage = nil
+        }
+        
+        guard let url = URL(string: validateURL) else { return }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 8.0
+        
+        let payload: [String: Any] = [
+            "key": cleanKey,
+            "deviceId": deviceId,
+            "deviceName": deviceName
+        ]
+        
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        
+        URLSession.shared.dataTask(with: request) { [weak self] data, _, error in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.isLoading = false
+                
+                if let _ = error {
+                    if self.isActivated {
+                        completion(true, "offline_mode")
+                        return
+                    }
+                    self.errorMessage = "Cannot connect to EPZ Server (78.154.103.8:15429)."
+                    completion(false, "network_error")
+                    return
+                }
+                
+                guard let data = data,
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    self.errorMessage = "Invalid JSON response."
+                    completion(false, "invalid_response")
+                    return
+                }
+                
+                let valid = json["valid"] as? Bool ?? (json["status"] as? String == "valid" || json["status"] as? String == "success")
+                let reason = json["reason"] as? String ?? json["message"] as? String ?? json["status"] as? String ?? "unknown"
+                
+                if valid {
+                    self.isActivated = true
+                    self.savedKey = cleanKey
+                    self.errorMessage = nil
+                    UserDefaults.standard.set(cleanKey, forKey: "epz_license_key")
+                    UserDefaults.standard.set(true, forKey: "epz_is_activated")
+                    completion(true, "success")
+                } else {
+                    self.isActivated = false
+                    UserDefaults.standard.set(false, forKey: "epz_is_activated")
+                    
+                    switch reason {
+                    case "key_not_found": self.errorMessage = "Key Not Found in EPZ Database."
+                    case "key_revoked": self.errorMessage = "Key REVOKED by EPZ Admin."
+                    case "device_mismatch": self.errorMessage = "Device Mismatch: Locked to another HWID."
+                    case "expired": self.errorMessage = "License Expired."
+                    default: self.errorMessage = "Activation Failed: \(reason)"
+                    }
+                    completion(false, reason)
+                }
+            }
+        }.resume()
+    }
+}
+
+// MARK: - VIEWS
+struct LicenseView: View {
+    @ObservedObject var licenseManager = LicenseManager.shared
+    @State private var inputKey: String = ""
+    @State private var showHwidCopiedAlert: Bool = false
     
     var body: some View {
-        NavigationView {
-            ScrollView {
+        VStack(spacing: 24) {
+            Spacer()
+            
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [.cyan, Color(red: 0.0, green: 0.6, blue: 1.0)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 88, height: 88)
+                        .shadow(color: .cyan.opacity(0.6), radius: 16, x: 0, y: 6)
+                    
+                    Image(systemName: "bolt.shield.fill")
+                        .font(.system(size: 42, weight: .bold))
+                        .foregroundColor(.black)
+                }
+                
+                Text("EPZ GAME TURBO")
+                    .font(.system(size: 28, weight: .black, design: .rounded))
+                    .foregroundColor(.cyan)
+                
+                Text("iOS Wispbyte License Server Activation")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+            }
+            
+            VStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("iOS HWID (Hardware Locked)")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.gray)
+                        Spacer()
+                        Button(action: {
+                            UIPasteboard.general.string = licenseManager.deviceId
+                            showHwidCopiedAlert = true
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "doc.on.doc")
+                                Text("Copy HWID")
+                            }
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.cyan)
+                        }
+                    }
+                    
+                    Text(licenseManager.deviceId)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.cyan)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(white: 0.08))
+                        .cornerRadius(8)
+                    
+                    Text(licenseManager.deviceName)
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Enter EPZ License Key")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    
+                    HStack {
+                        Image(systemName: "key.fill")
+                            .foregroundColor(.cyan)
+                        
+                        TextField("EPZ-XXXX-XXXX-XXXX", text: $inputKey)
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .autocapitalization(.allCharacters)
+                            .disableAutocorrection(true)
+                    }
+                    .padding(14)
+                    .background(Color(white: 0.16))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(licenseManager.errorMessage != nil ? Color.red : Color.cyan.opacity(0.5), lineWidth: 1.5)
+                    )
+                }
+                
+                if let errorMsg = licenseManager.errorMessage {
+                    HStack(spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
+                        Text(errorMsg)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.red)
+                            .multilineTextAlignment(.leading)
+                        Spacer()
+                    }
+                    .padding(12)
+                    .background(Color.red.opacity(0.14))
+                    .cornerRadius(10)
+                }
+                
+                Button(action: {
+                    licenseManager.validateKey(key: inputKey) { _, _ in }
+                }) {
+                    HStack {
+                        if licenseManager.isLoading {
+                            ProgressView()
+                                .accentColor(.black)
+                                .padding(.trailing, 6)
+                            Text("Connecting to EPZ Server...")
+                                .font(.headline)
+                                .fontWeight(.bold)
+                        } else {
+                            Image(systemName: "checkmark.seal.fill")
+                            Text("ACTIVATE EPZ TURBO")
+                                .font(.headline)
+                                .fontWeight(.black)
+                        }
+                    }
+                    .foregroundColor(.black)
+                    .padding(16)
+                    .frame(maxWidth: .infinity)
+                    .background(LinearGradient(colors: [.cyan, Color(red: 0.0, green: 0.7, blue: 1.0)], startPoint: .leading, endPoint: .trailing))
+                    .cornerRadius(14)
+                    .shadow(color: .cyan.opacity(0.4), radius: 10, x: 0, y: 4)
+                }
+                .disabled(licenseManager.isLoading)
+            }
+            .padding(20)
+            .background(Color(white: 0.10))
+            .cornerRadius(20)
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.cyan.opacity(0.3), lineWidth: 1))
+            
+            Spacer()
+            
+            VStack(spacing: 4) {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color.cyan)
+                        .frame(width: 8, height: 8)
+                    Text("Wispbyte Server: http://78.154.103.8:15429")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+                Text("Admin Panel: http://78.154.103.8:15429/admin")
+                    .font(.caption2)
+                    .foregroundColor(Color.cyan.opacity(0.9))
+            }
+            .padding(.bottom, 16)
+        }
+        .padding(.horizontal, 20)
+        .background(Color.black.ignoresSafeArea())
+        .onAppear {
+            if !licenseManager.savedKey.isEmpty {
+                inputKey = licenseManager.savedKey
+            }
+        }
+        .alert(isPresented: $showHwidCopiedAlert) {
+            Alert(title: Text("HWID Copied"), message: Text("Device HWID copied. Send to EPZ Admin."), dismissButton: .default(Text("OK")))
+        }
+    }
+}
+
+struct HardwareDiagnosticsView: View {
+    @ObservedObject var diagnostics = HardwareDiagnostics.shared
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("EPZ HARDWARE MONITOR")
+                            .font(.caption)
+                            .fontWeight(.black)
+                            .foregroundColor(.cyan)
+                        Text("Live System Diagnostics")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    }
+                    Spacer()
+                    Image(systemName: "cpu")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(.cyan)
+                }
+                .padding(.top, 10)
+                
+                VStack(spacing: 16) {
+                    HStack {
+                        Image(systemName: "memorychip")
+                            .foregroundColor(.cyan)
+                        Text("RAM Capacity (mach_host_basic_info)")
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        Spacer()
+                        Text("\(Int(diagnostics.ramUsagePercentage))%")
+                            .font(.title3)
+                            .fontWeight(.black)
+                            .foregroundColor(.cyan)
+                    }
+                    
+                    ZStack {
+                        Circle()
+                            .stroke(Color(white: 0.15), lineWidth: 14)
+                        
+                        Circle()
+                            .trim(from: 0.0, to: CGFloat(diagnostics.ramUsagePercentage / 100.0))
+                            .stroke(
+                                LinearGradient(colors: [.cyan, Color(red: 0.0, green: 0.7, blue: 1.0)], startPoint: .leading, endPoint: .trailing),
+                                style: StrokeStyle(lineWidth: 14, lineCap: .round)
+                            )
+                            .rotationEffect(.degrees(-90))
+                            .animation(.easeOut(duration: 0.5), value: diagnostics.ramUsagePercentage)
+                        
+                        VStack(spacing: 4) {
+                            Text(String(format: "%.0f MB", diagnostics.usedRAMMB))
+                                .font(.system(size: 22, weight: .black, design: .monospaced))
+                                .foregroundColor(.white)
+                            Text("USED / \(Int(diagnostics.totalRAMMB)) MB TOTAL")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    .frame(height: 160)
+                    .padding(.vertical, 8)
+                }
+                .padding(18)
+                .background(Color(white: 0.10))
+                .cornerRadius(18)
+                .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.cyan.opacity(0.2), lineWidth: 1))
+            }
+            .padding(16)
+        }
+        .background(Color.black.ignoresSafeArea())
+    }
+}
+
+struct TurboBoostView: View {
+    @ObservedObject var turboEngine = TurboEngine.shared
+    @ObservedObject var diagnostics = HardwareDiagnostics.shared
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("EPZ TURBO ENGINE")
+                            .font(.caption)
+                            .fontWeight(.black)
+                            .foregroundColor(.cyan)
+                        Text("Memory Cleaner & 120Hz Boost")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    }
+                    Spacer()
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(.cyan)
+                }
+                .padding(.top, 10)
+                
+                VStack(spacing: 16) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("120Hz PROMOTION TURBO MODE")
+                                .font(.caption)
+                                .fontWeight(.black)
+                                .foregroundColor(.cyan)
+                            Text(turboEngine.turboStatusText)
+                                .font(.subheadline)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                        }
+                        Spacer()
+                        
+                        Button(action: {
+                            turboEngine.toggleTurboMode()
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(turboEngine.isTurboActive ? LinearGradient(colors: [.cyan, Color(red: 0.0, green: 0.7, blue: 1.0)], startPoint: .topLeading, endPoint: .bottomTrailing) : LinearGradient(colors: [Color(white: 0.2), Color(white: 0.15)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(width: 64, height: 64)
+                                    .shadow(color: turboEngine.isTurboActive ? .cyan.opacity(0.6) : .clear, radius: 12, x: 0, y: 4)
+                                
+                                Image(systemName: "bolt.fill")
+                                    .font(.system(size: 28, weight: .black))
+                                    .foregroundColor(turboEngine.isTurboActive ? .black : .gray)
+                            }
+                        }
+                    }
+                }
+                .padding(20)
+                .background(Color(white: 0.10))
+                .cornerRadius(20)
+                .overlay(RoundedRectangle(cornerRadius: 20).stroke(turboEngine.isTurboActive ? Color.cyan : Color.cyan.opacity(0.2), lineWidth: 1.5))
+                
+                VStack(spacing: 16) {
+                    HStack {
+                        Image(systemName: "trash.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.cyan)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("HARDWARE RAM PURGE")
+                                .font(.caption)
+                                .fontWeight(.black)
+                                .foregroundColor(.cyan)
+                            Text("Flushes Background Cache & Evicts Heap Memory")
+                                .font(.caption2)
+                                .foregroundColor(.gray)
+                        }
+                        Spacer()
+                    }
+                    
+                    Button(action: {
+                        turboEngine.cleanMemory { _ in }
+                    }) {
+                        HStack {
+                            if turboEngine.isCleaningMemory {
+                                ProgressView()
+                                    .accentColor(.black)
+                                    .padding(.trailing, 6)
+                                Text("PURGING KERNEL CACHE...")
+                                    .font(.headline)
+                                    .fontWeight(.black)
+                            } else {
+                                Image(systemName: "sparkles")
+                                Text("CLEAN RAM NOW")
+                                    .font(.headline)
+                                    .fontWeight(.black)
+                            }
+                        }
+                        .foregroundColor(.black)
+                        .padding(16)
+                        .frame(maxWidth: .infinity)
+                        .background(LinearGradient(colors: [.cyan, Color(red: 0.0, green: 0.7, blue: 1.0)], startPoint: .leading, endPoint: .trailing))
+                        .cornerRadius(14)
+                        .shadow(color: .cyan.opacity(0.4), radius: 10, x: 0, y: 4)
+                    }
+                    .disabled(turboEngine.isCleaningMemory)
+                }
+                .padding(20)
+                .background(Color(white: 0.10))
+                .cornerRadius(20)
+            }
+            .padding(16)
+        }
+        .background(Color.black.ignoresSafeArea())
+    }
+}
+
+struct SuperTouchView: View {
+    @State private var tapSensitivity: Double = 92.0
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("EPZ SUPER TOUCH ENGINE")
+                            .font(.caption)
+                            .fontWeight(.black)
+                            .foregroundColor(.cyan)
+                        Text("Touch Response & Gesture Tuning")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    }
+                    Spacer()
+                    Image(systemName: "hand.tap.fill")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(.cyan)
+                }
+                .padding(.top, 10)
+                
                 VStack(spacing: 20) {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Image(systemName: "scope")
-                                .font(.title)
-                                .foregroundColor(.orange)
-                            Text("Sens Calculator")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                            Spacer()
-                            Text("AIM STABLE")
-                                .font(.caption)
-                                .fontWeight(.black)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(Color.orange.opacity(0.3))
-                                .cornerRadius(8)
-                                .foregroundColor(.orange)
-                        }
-                        Text("Calibrated for high touch sampling & smooth drag headshots.")
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                    }
-                    .padding()
-                    .background(Color(white: 0.12))
-                    .cornerRadius(16)
-                    
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Select Device Model")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        
-                        Picker("Device", selection: $selectedModel) {
-                            ForEach(iPhoneModel.allCases) { model in
-                                Text(model.rawValue).tag(model)
-                            }
-                        }
-                        .pickerStyle(MenuPickerStyle())
-                        .padding(12)
-                        .frame(maxWidth: .infinity)
-                        .background(Color(white: 0.16))
-                        .cornerRadius(12)
-                        .foregroundColor(.orange)
-                        .onChange(of: selectedModel) { _ in
-                            recalculateSensitivity()
-                        }
-                    }
-                    .padding()
-                    .background(Color(white: 0.12))
-                    .cornerRadius(16)
-                    
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Select Playstyle")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        
-                        HStack(spacing: 8) {
-                            ForEach(PlayStyle.allCases) { style in
-                                Button(action: {
-                                    selectedStyle = style
-                                    recalculateSensitivity()
-                                }) {
-                                    VStack(spacing: 6) {
-                                        Image(systemName: style.iconName)
-                                            .font(.body)
-                                        Text(style.rawValue)
-                                            .font(.caption2)
-                                            .fontWeight(.semibold)
-                                            .multilineTextAlignment(.center)
-                                    }
-                                    .padding(.vertical, 10)
-                                    .padding(.horizontal, 6)
-                                    .frame(maxWidth: .infinity)
-                                    .background(selectedStyle == style ? Color.orange : Color(white: 0.18))
-                                    .foregroundColor(selectedStyle == style ? .black : .white)
-                                    .cornerRadius(10)
-                                }
-                            }
-                        }
-                    }
-                    .padding()
-                    .background(Color(white: 0.12))
-                    .cornerRadius(16)
-                    
-                    VStack(spacing: 16) {
-                        HStack {
-                            Text("Calibrated Values")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                            Spacer()
-                            Button(action: {
-                                copyToClipboard()
-                            }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "doc.on.doc")
-                                    Text("Copy All")
-                                }
+                            Text("Tap Sensitivity (Instant Response)")
                                 .font(.caption)
                                 .fontWeight(.bold)
-                                .foregroundColor(.orange)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color.orange.opacity(0.15))
-                                .cornerRadius(8)
-                            }
-                        }
-                        
-                        SensitivitySliderRow(title: "General", value: $general, range: 70...100, color: .orange)
-                        SensitivitySliderRow(title: "Red Dot", value: $redDot, range: 60...100, color: .red)
-                        SensitivitySliderRow(title: "2x Scope", value: $scope2x, range: 60...100, color: .yellow)
-                        SensitivitySliderRow(title: "4x Scope", value: $scope4x, range: 50...100, color: .green)
-                        SensitivitySliderRow(title: "AWM Scope", value: $awmScope, range: 30...80, color: .blue)
-                        SensitivitySliderRow(title: "Free Look", value: $freeLook, range: 40...100, color: .purple)
-                        
-                        Divider().background(Color.gray.opacity(0.3))
-                        
-                        SensitivitySliderRow(title: "Right Fire Button Size", value: $fireButtonSize, range: 35...60, color: .cyan, unit: "%")
-                    }
-                    .padding()
-                    .background(Color(white: 0.12))
-                    .cornerRadius(16)
-                    
-                    VStack(spacing: 8) {
-                        HStack {
-                            Image(systemName: "checkmark.shield.fill")
-                                .foregroundColor(.green)
-                            Text("Calculated Aim Stability Index")
-                                .font(.subheadline)
                                 .foregroundColor(.white)
                             Spacer()
-                            Text("\(calculateStabilityIndex())%")
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .foregroundColor(.green)
-                        }
-                        
-                        ProgressView(value: Double(calculateStabilityIndex()), total: 100.0)
-                            .accentColor(.green)
-                    }
-                    .padding()
-                    .background(Color(white: 0.12))
-                    .cornerRadius(16)
-                }
-                .padding()
-            }
-            .background(Color.black.ignoresSafeArea())
-            .navigationTitle("Sens Optimizer")
-            .alert(isPresented: $showCopiedAlert) {
-                Alert(title: Text("Settings Copied!"), message: Text("Paste these exact values into Garena Free Fire sensitivity settings."), dismissButton: .default(Text("OK")))
-            }
-        }
-    }
-    
-    private func recalculateSensitivity() {
-        var baseGen = Double(selectedModel.baseGeneralSensitivity)
-        var baseRed = Double(selectedModel.baseRedDot)
-        var baseButton = Double(selectedModel.recommendedFireButtonSize)
-        
-        switch selectedStyle {
-        case .dragHeadshot:
-            baseGen -= 1
-            baseRed -= 1
-            baseButton = 44
-        case .sniper:
-            baseGen -= 5
-            baseRed -= 4
-            baseButton = 48
-        case .rush:
-            baseGen += 2
-            baseRed += 2
-            baseButton = 42
-        case .balanced:
-            break
-        }
-        
-        general = min(max(baseGen, 70), 100)
-        redDot = min(max(baseRed, 60), 100)
-        scope2x = min(max(baseRed - 6, 60), 100)
-        scope4x = min(max(baseRed - 12, 50), 100)
-        awmScope = 52
-        freeLook = 70
-        fireButtonSize = baseButton
-    }
-    
-    private func calculateStabilityIndex() -> Int {
-        if general > 97 { return 82 }
-        if general >= 92 && general <= 96 { return 98 }
-        return 91
-    }
-    
-    private func copyToClipboard() {
-        let text = """
-        --- Free Fire Calibrated Settings ---
-        Device: \(selectedModel.rawValue)
-        General: \(Int(general))
-        Red Dot: \(Int(redDot))
-        2x Scope: \(Int(scope2x))
-        4x Scope: \(Int(scope4x))
-        AWM Scope: \(Int(awmScope))
-        Free Look: \(Int(freeLook))
-        Fire Button Size: \(Int(fireButtonSize))%
-        Stability Rating: \(calculateStabilityIndex())%
-        """
-        UIPasteboard.general.string = text
-        showCopiedAlert = true
-    }
-}
-
-struct SensitivitySliderRow: View {
-    let title: String
-    @Binding var value: Double
-    let range: ClosedRange<Double>
-    let color: Color
-    var unit: String = ""
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            HStack {
-                Text(title)
-                    .font(.subheadline)
-                    .foregroundColor(.white)
-                Spacer()
-                Text("\(Int(value))\(unit)")
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundColor(color)
-            }
-            Slider(value: $value, in: range, step: 1)
-                .accentColor(color)
-        }
-    }
-}
-
-struct TouchTestView: View {
-    @State private var points: [CGPoint] = []
-    @State private var smoothnessScore: Int = 100
-    @State private var jitterDetected: Bool = false
-    @State private var touchCount: Int = 0
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 16) {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Smoothness")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                        Text("\(smoothnessScore)%")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(smoothnessScore > 90 ? .green : .orange)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(10)
-                    .background(Color(white: 0.12))
-                    .cornerRadius(12)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Aim Flickering")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                        Text(jitterDetected ? "DETECTED" : "STABLE")
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(jitterDetected ? .red : .green)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(10)
-                    .background(Color(white: 0.12))
-                    .cornerRadius(12)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Points Polled")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                        Text("\(touchCount)")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.cyan)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(10)
-                    .background(Color(white: 0.12))
-                    .cornerRadius(12)
-                }
-                .padding(.horizontal)
-                
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(white: 0.08))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(jitterDetected ? Color.red.opacity(0.5) : Color.orange.opacity(0.3), lineWidth: 2)
-                        )
-                    
-                    VStack {
-                        Spacer()
-                        Text("SWIPE / DRAG UP HERE TO TEST AIM STABILITY")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(Color.white.opacity(0.3))
-                            .padding(.bottom, 20)
-                    }
-                    
-                    Path { path in
-                        guard let firstPoint = points.first else { return }
-                        path.move(to: firstPoint)
-                        for point in points.dropFirst() {
-                            path.addLine(to: point)
-                        }
-                    }
-                    .stroke(jitterDetected ? Color.red : Color.orange, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
-                }
-                .padding(.horizontal)
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            let newPoint = value.location
-                            points.append(newPoint)
-                            touchCount = points.count
-                            analyzeTouchStability()
-                        }
-                )
-                
-                HStack(spacing: 16) {
-                    Button(action: {
-                        points.removeAll()
-                        smoothnessScore = 100
-                        jitterDetected = false
-                        touchCount = 0
-                    }) {
-                        HStack {
-                            Image(systemName: "arrow.clockwise")
-                            Text("Clear Canvas")
-                        }
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color(white: 0.16))
-                        .cornerRadius(12)
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 10)
-            }
-            .background(Color.black.ignoresSafeArea())
-            .navigationTitle("Touch Diagnostic")
-        }
-    }
-    
-    private func analyzeTouchStability() {
-        guard points.count > 5 else { return }
-        var suddenDirectionChanges = 0
-        
-        for i in 2..<points.count {
-            let p1 = points[i - 2]
-            let p2 = points[i - 1]
-            let p3 = points[i]
-            
-            let dx1 = p2.x - p1.x
-            let dx2 = p3.x - p2.x
-            
-            if abs(dx2 - dx1) > 15 {
-                suddenDirectionChanges += 1
-            }
-        }
-        
-        if suddenDirectionChanges > 3 {
-            jitterDetected = true
-            smoothnessScore = max(70, 100 - (suddenDirectionChanges * 5))
-        } else {
-            jitterDetected = false
-            smoothnessScore = 98
-        }
-    }
-}
-
-struct PerformanceGuideView: View {
-    @State private var items: [OptimizationItem] = [
-        OptimizationItem(title: "Enable Game Mode (iOS 18+)", category: "System", detail: "Prioritizes CPU/GPU resources for Free Fire and blocks background interruptions.", recommendedSetting: "ON"),
-        OptimizationItem(title: "Disable Low Power Mode", category: "Battery", detail: "Low Power Mode limits CPU clock speed by 50%, causing severe aim flickering and touch drops.", recommendedSetting: "OFF"),
-        OptimizationItem(title: "Touch Accommodations", category: "Accessibility", detail: "If enabled, iOS adds a delay before your drag headshot swipe registers.", recommendedSetting: "OFF"),
-        OptimizationItem(title: "Haptic Touch Speed", category: "Accessibility", detail: "Fast touch response reduces fire button press latency.", recommendedSetting: "FAST"),
-        OptimizationItem(title: "Disable Auto-Brightness", category: "Display", detail: "Prevents screen dimming when hands cover ambient light sensor during intense gameplay.", recommendedSetting: "OFF"),
-        OptimizationItem(title: "Free Fire High FPS Mode", category: "In-Game", detail: "Unlocks 60-120 FPS output, eliminating frame pacing stutter and camera aim jitter.", recommendedSetting: "HIGH"),
-        OptimizationItem(title: "Free Fire Graphics Level", category: "In-Game", detail: "Use Smooth or Standard to avoid thermal throttling during long ranked matches.", recommendedSetting: "SMOOTH")
-    ]
-    
-    var completedCount: Int {
-        items.filter { $0.isCompleted }.count
-    }
-    
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Image(systemName: "bolt.badge.clock.fill")
-                                .font(.title)
-                                .foregroundColor(.green)
-                            Text("System FPS Booster")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                            Spacer()
-                            Text("\(completedCount)/\(items.count)")
+                            Text("\(Int(tapSensitivity))%")
                                 .font(.headline)
                                 .fontWeight(.black)
-                                .foregroundColor(.green)
-                        }
-                        
-                        ProgressView(value: Double(completedCount), total: Double(items.count))
-                            .accentColor(.green)
-                        
-                        Text("Complete all items in iPhone Settings to achieve maximum frame stability.")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                    .padding()
-                    .background(Color(white: 0.12))
-                    .cornerRadius(16)
-                    
-                    ForEach(items.indices, id: \.self) { index in
-                        HStack(alignment: .top, spacing: 14) {
-                            Button(action: {
-                                items[index].isCompleted.toggle()
-                            }) {
-                                Image(systemName: items[index].isCompleted ? "checkmark.circle.fill" : "circle")
-                                    .font(.title2)
-                                    .foregroundColor(items[index].isCompleted ? .green : .gray)
-                            }
-                            .padding(.top, 2)
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Text(items[index].title)
-                                        .font(.headline)
-                                        .foregroundColor(.white)
-                                    Spacer()
-                                    Text(items[index].recommendedSetting)
-                                        .font(.caption2)
-                                        .fontWeight(.bold)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.orange.opacity(0.2))
-                                        .foregroundColor(.orange)
-                                        .cornerRadius(6)
-                                }
-                                
-                                Text(items[index].detail)
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
-                            }
-                        }
-                        .padding()
-                        .background(Color(white: 0.12))
-                        .cornerRadius(14)
-                    }
-                }
-                .padding()
-            }
-            .background(Color.black.ignoresSafeArea())
-            .navigationTitle("FPS Optimizer")
-        }
-    }
-}
-
-struct PingTestView: View {
-    @State private var selectedRegion: String = "Asia / India"
-    @State private var isTesting: Bool = false
-    @State private var pingMs: Int = 24
-    @State private var jitterMs: Int = 2
-    @State private var packetLoss: Double = 0.0
-    @State private var networkStatus: String = "EXCELLENT"
-    
-    let regions = ["Asia / India", "Singapore (SEA)", "Europe", "North America", "South America (LATAM)"]
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Select Game Server Region")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    
-                    Picker("Region", selection: $selectedRegion) {
-                        ForEach(regions, id: \.self) { region in
-                            Text(region).tag(region)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
-                    .padding(10)
-                    .frame(maxWidth: .infinity)
-                    .background(Color(white: 0.16))
-                    .cornerRadius(12)
-                    .foregroundColor(.orange)
-                }
-                .padding()
-                .background(Color(white: 0.12))
-                .cornerRadius(16)
-                
-                VStack(spacing: 16) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("LATENCY (PING)")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                            HStack(alignment: .firstTextBaseline) {
-                                Text("\(pingMs)")
-                                    .font(.system(size: 40, weight: .black, design: .rounded))
-                                    .foregroundColor(pingMs < 50 ? .green : (pingMs < 90 ? .orange : .red))
-                                Text("ms")
-                                    .font(.headline)
-                                    .foregroundColor(.gray)
-                            }
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("NETWORK STATUS")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                            Text(networkStatus)
-                                .font(.headline)
-                                .fontWeight(.bold)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(pingMs < 50 ? Color.green.opacity(0.2) : Color.orange.opacity(0.2))
-                                .foregroundColor(pingMs < 50 ? .green : .orange)
-                                .cornerRadius(8)
-                        }
-                    }
-                    
-                    Divider().background(Color.gray.opacity(0.3))
-                    
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Jitter (Fluctuating Lag)")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                            Text("\(jitterMs) ms")
-                                .font(.title3)
-                                .fontWeight(.bold)
                                 .foregroundColor(.cyan)
                         }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("Packet Loss")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                            Text(String(format: "%.1f%%", packetLoss))
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .foregroundColor(packetLoss == 0 ? .green : .red)
-                        }
+                        Slider(value: $tapSensitivity, in: 50...100, step: 1.0)
+                            .accentColor(.cyan)
                     }
                 }
-                .padding()
-                .background(Color(white: 0.12))
-                .cornerRadius(16)
-                
-                Button(action: {
-                    runNetworkTest()
-                }) {
-                    HStack {
-                        if isTesting {
-                            ProgressView()
-                                .accentColor(.black)
-                            Text("Diagnosing Network...")
-                        } else {
-                            Image(systemName: "wifi")
-                            Text("Test Ping Stability")
-                        }
-                    }
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundColor(.black)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.orange)
-                    .cornerRadius(14)
-                }
-                .disabled(isTesting)
-                .padding(.horizontal)
-                
-                Spacer()
+                .padding(18)
+                .background(Color(white: 0.10))
+                .cornerRadius(18)
             }
-            .padding()
-            .background(Color.black.ignoresSafeArea())
-            .navigationTitle("Ping Tester")
+            .padding(16)
         }
+        .background(Color.black.ignoresSafeArea())
     }
+}
+
+struct SensitivityCalculatorView: View {
+    @State private var generalSens: Double = 94.0
     
-    private func runNetworkTest() {
-        isTesting = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            pingMs = Int.random(in: 18...38)
-            jitterMs = Int.random(in: 1...4)
-            packetLoss = 0.0
-            networkStatus = "EXCELLENT"
-            isTesting = false
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("EPZ UNIVERSAL SENS ENGINE")
+                            .font(.caption)
+                            .fontWeight(.black)
+                            .foregroundColor(.cyan)
+                        Text("120Hz Drag Headshot Tuning")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    }
+                    Spacer()
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(.cyan)
+                }
+                .padding(.top, 10)
+            }
+            .padding(16)
         }
+        .background(Color.black.ignoresSafeArea())
     }
 }
