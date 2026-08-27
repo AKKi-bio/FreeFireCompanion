@@ -27,7 +27,7 @@ jobs:
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           echo "Using iOS SDK Path: $SDK_PATH"
           
-          # Compile ContentView.swift with -parse-as-library for SwiftUI @main
+          # Compile ContentView.swift with -parse-as-library for AppLauncher
           xcrun swiftc -target arm64-apple-ios16.0 \
                  -sdk "$SDK_PATH" \
                  -parse-as-library \
