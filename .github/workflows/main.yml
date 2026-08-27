@@ -21,10 +21,10 @@ jobs:
           mkdir -p build
           echo "Compiling ContentView.swift directly..."
           
-          # Explicitly compile master ContentView.swift file
+          # Compile standalone executable for iOS 16.0+
           xcrun swiftc -target arm64-apple-ios16.0 \
                  -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" \
-                 -parse-as-library \
+                 -emit-executable \
                  -framework SwiftUI \
                  -framework UIKit \
                  -framework Foundation \
@@ -32,8 +32,6 @@ jobs:
                  -framework QuartzCore \
                  -framework AudioToolbox \
                  -O \
-                 -whole-module-optimization \
-                 -Xlinker -dead_strip \
                  -o build/EPZGameTurbo \
                  ContentView.swift
 
